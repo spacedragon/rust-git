@@ -1,0 +1,16 @@
+[package]
+name = "rust-git"
+version = "0.1.0"
+authors = ["spacedragon <allendragon@gmail.com>"]
+edition = "2018"
+
+[lib]
+name = "rust_git"
+path = "src/lib.rs"
+
+[[bin]]
+name = "git"
+path = "src/main.rs"
+
+[dependencies]
+structopt = "0.2.18"
