@@ -1,65 +1,124 @@
 use std::path::{Path, PathBuf};
-use std::fs::{DirEntry, ReadDir};
+
 use os_str_generic::OsStrGenericExt;
-use std::sync::Arc;
-
-#[derive(Debug)]
-pub struct FileSystem;
+use std::collections::HashMap;
 
 
-pub enum LsFiles {
-    Empty,
-    Dir(ReadDir, PathBuf),
-}
-
-impl Iterator for LsFiles {
-    type Item = DirEntry;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            LsFiles::Empty => None,
-            LsFiles::Dir(readDir, prefix) => {
-                while let Some(e) = readDir.next() {
-                    if let Ok(e) = e {
-                        if e.file_name().starts_with(prefix.file_name().unwrap()) {
-                            return Some(e);
-                        }
-                    }
-                }
-                return None;
-            }
+pub trait FileSystem {
+    fn is_dir<P: AsRef<Path>>(&self, path: P) -> bool;
+    fn read_dir<P: AsRef<Path>>(&self, path: P) -> Box<dyn Iterator<Item= PathBuf>>;
+    fn ls_files<P: AsRef<Path>>(&self, path: P) -> Box<dyn Iterator<Item= PathBuf>> {
+        let path = path.as_ref().to_path_buf();
+        let dir;
+        let prefix ;
+        if self.is_dir(&path) {
+            prefix = None;
+            dir = path.as_path();
+        } else {
+            prefix = path.file_name().map(|f|f.to_os_string());
+            dir = path.parent().unwrap_or(Path::new("."));
+        }
+        if let Some(prefix) = prefix {
+            let iter = self.read_dir(&dir)
+                .filter( move|p| p.file_name().is_some() &&
+                    p.file_name().unwrap().starts_with(&prefix));
+            Box::new(iter)
+        } else {
+            self.read_dir(dir)
         }
     }
 }
 
-impl FileSystem {
-    pub fn is_dir<P: AsRef<Path>>(&self, path: P) -> bool {
+#[derive(Debug)]
+pub struct OsFs;
+
+impl FileSystem for OsFs {
+    fn is_dir<P: AsRef<Path>>(&self, path: P) -> bool {
         path.as_ref().is_dir()
     }
 
-    pub fn ls_files<P : AsRef<Path>>(&self, path: P) -> LsFiles {
-        let p = path.as_ref();
-        let dir = p.parent().unwrap_or(Path::new("."));
-
-        if dir.is_dir() {
-            if let Ok(readDir) = dir.read_dir() {
-                LsFiles::Dir(readDir, p.to_path_buf())
+    fn read_dir<P: AsRef<Path>>(&self, path: P) -> Box<dyn Iterator<Item=PathBuf>>{
+        let path = path.as_ref();
+        if self.is_dir(path) {
+            if let Ok(read) = path.read_dir() {
+                let read = read
+                    .flat_map(|e| e.ok())
+                    .map(|e| e.path());
+                Box::new(read)
             } else {
-                LsFiles::Empty
+                Box::new(std::iter::empty::<PathBuf>())
             }
         } else {
-            LsFiles::Empty
+            Box::new(std::iter::empty::<PathBuf>())
+        }
+    }
+}
+
+
+#[derive(Debug, Default)]
+pub struct MemFs (HashMap<PathBuf, Vec<u8>>);
+
+impl MemFs {
+    pub fn add_file<P: AsRef<Path>>(&mut self, file_name: P, content: Vec<u8>) {
+        self.0.insert(file_name.as_ref().to_path_buf(), content);
+    }
+}
+
+impl FileSystem for MemFs {
+    fn is_dir<P: AsRef<Path>>(&self, path: P) -> bool {
+        let path = path.as_ref();
+        for (p, _) in &self.0 {
+            let mut dir = p.parent();
+            while let Some(p) = dir {
+                if p == path {
+                    return true
+                }
+                dir = p.parent();
+            }
+        }
+        false
+    }
+
+    fn read_dir<P: AsRef<Path>>(&self, path: P) -> Box<dyn Iterator<Item=PathBuf>> {
+        let path = path.as_ref();
+        if self.is_dir(path) {
+            let keys: Vec<PathBuf> = self.0.keys()
+                .map(|k| k.to_path_buf())
+                .filter( |p| {
+                     if let Some(parent) = p.parent() {
+                         return parent == path;
+                     }
+                    return false;
+                })
+                .collect();
+            Box::new(keys.into_iter())
+        } else {
+            Box::new(std::iter::empty::<PathBuf>())
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::fs::FileSystem;
+    use crate::fs::*;
 
     #[test]
     fn fs_can_ls_files() {
-        let fs = FileSystem {};
+        let fs = OsFs {};
         assert_eq!(fs.ls_files("./Cargo").take(2).count(), 2);
+    }
+
+    #[test]
+    fn fs_mem_fs() {
+        let mut fs = MemFs::default();
+        fs.add_file("/test/2/1.txt", vec![]);
+        fs.add_file("/test/2/2.txt", vec![]);
+        assert!(fs.is_dir("/test"));
+        assert!(fs.is_dir("/test/2"));
+        assert!(!fs.is_dir("/tes"));
+        assert!(!fs.is_dir("/test/2/1"));
+
+        assert_eq!(fs.ls_files("/test/2/").count(), 2);
+        assert_eq!(fs.ls_files("/test/2/1").count(), 1);
     }
 }

@@ -1,7 +1,8 @@
 
 use structopt::StructOpt;
 use structopt::clap::App;
- 
+use crate::errors::*;
+
 #[derive(Debug, StructOpt)]
 pub struct CatFileOpt {
         #[structopt(short = "p" )]
@@ -26,7 +27,8 @@ pub struct CatFileOpt {
 }
 
 
-pub fn cat_file(clap: &mut App, opt: CatFileOpt) {
+pub fn cat_file(clap: &mut App, opt: CatFileOpt) -> Result<()> {
         println!("{:?}", opt);
         clap.print_help().expect("");
+        Ok(())
 }
