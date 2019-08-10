@@ -2,40 +2,33 @@ use std::path::{Path, PathBuf};
 
 use super::object::GitObject;
 use super::id::Id;
-use crate::fs::FileSystem;
+use crate::fs::{ FileSystem, OsFs };
 
+use crate::errors::*;
+use std::str::FromStr;
 
 trait Repository {
     fn lookup(id: &str) -> Option<GitObject>;
 }
 
 #[derive(Debug)]
-pub struct FileRepository{
+pub struct FileRepository<FS: FileSystem> {
     path: PathBuf,
     git_dir: PathBuf,
     is_bare: bool,
-    fs: FileSystem
+    fs: FS,
 }
 
 
-impl Repository for FileRepository {
-    fn lookup(id: &str) -> Option<GitObject> {
+impl Repository for FileRepository<OsFs> {
+    fn lookup(_id: &str) -> Option<GitObject> {
         unimplemented!()
     }
 }
 
-#[derive(Debug)]
-pub struct InvalidRepositoryError(PathBuf);
-
-impl std::fmt::Display for InvalidRepositoryError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} is not a valid repository" , self.0.to_string_lossy())
-    }
-}
 
 
-
-impl FileRepository {
+impl FileRepository<OsFs> {
     pub fn is_bare(&self) -> bool {
         self.is_bare
     }
@@ -46,15 +39,9 @@ impl FileRepository {
         self.git_dir.as_path()
     }
 
-    fn check_git_dir<P: AsRef<Path>>(path: P) -> bool {
-        if path.as_ref().is_dir() {
-            true
-        } else {
-            false
-        }
-    }
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<FileRepository, InvalidRepositoryError> {
-        let fs = FileSystem {};
+
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<FileRepository<OsFs>> {
+        let fs = OsFs {};
         let repo_path = PathBuf::new().join(path);
         let git_dir = repo_path.join(".git");
         if fs.is_dir(&git_dir) {
@@ -72,32 +59,24 @@ impl FileRepository {
                 fs,
             })
         } else {
-            Err(InvalidRepositoryError(repo_path))
+            Err(ErrorKind::InvalidRepository(repo_path).into())
         }
     }
     pub fn lookup_loose_object_by_prefix(&self, idstr: &str) -> Option<Id> {
         if idstr.len() <= 2 {
             return None;
         }
-        let (prefix, rest) = &idstr.split_at(2);
+        let (prefix, rest) = idstr.split_at(2);
         let objects_dir = self.git_dir.join("objects").join(prefix);
-        if objects_dir.is_dir() {
-            let mut ret = None;
-            if let Ok(entries) = objects_dir.read_dir() {
-                for entry in entries {
-                    if let Ok(entry) = entry {
-                        let mut filename = format!("{:?}", entry.file_name());
-                        if filename.starts_with(rest) {
-                            if ret == None {
-                                filename.insert_str(0, prefix);
-                                ret = Some(Id::new(filename.as_bytes()))
-                            } else {
-                                return None;
-                            }
-                        }
-                    }
-                }
-                return ret;
+        let files: Vec<PathBuf> = self.fs.ls_files(objects_dir.join(rest))
+            .take(2).collect();
+        if files.len() == 1 {
+            let file = files.first().unwrap();
+            if let Some(file) =  file.file_name() {
+                let mut hex = String::new();
+                hex.push_str(prefix);
+                hex.push_str(file.to_string_lossy().as_ref());
+                Id::from_str(&hex).ok()
             } else {
                 None
             }
