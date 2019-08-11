@@ -2,7 +2,10 @@ use std::path::{Path, PathBuf};
 
 use os_str_generic::OsStrGenericExt;
 use std::collections::HashMap;
-
+use std::fs::File;
+use crate::errors::*;
+use memmap::{MmapOptions};
+use std::io::{Read, Cursor};
 
 pub trait FileSystem {
     fn is_dir<P: AsRef<Path>>(&self, path: P) -> bool;
@@ -27,6 +30,7 @@ pub trait FileSystem {
             self.read_dir(dir)
         }
     }
+    fn read_file<P: AsRef<Path>>(&self, path: P) -> Result<Box<dyn Read>>;
 }
 
 #[derive(Debug)]
@@ -52,7 +56,14 @@ impl FileSystem for OsFs {
             Box::new(std::iter::empty::<PathBuf>())
         }
     }
+
+    fn read_file<P: AsRef<Path>>(&self, path: P) -> Result<Box<dyn Read>> {
+        let file = File::open(path)?;
+        let mmap = unsafe { MmapOptions::new().map(&file)? };
+        Ok(Box::new(Cursor::new(mmap)))
+    }
 }
+
 
 
 #[derive(Debug, Default)]
@@ -94,6 +105,17 @@ impl FileSystem for MemFs {
             Box::new(keys.into_iter())
         } else {
             Box::new(std::iter::empty::<PathBuf>())
+        }
+    }
+
+    fn read_file<P: AsRef<Path>>(& self, path: P) -> Result<Box<dyn Read>> {
+        let path = path.as_ref().to_path_buf();
+        if let Some(content) = self.0.get(&path) {
+            Ok(Box::new(Cursor::new(content.to_owned())))
+        } else {
+            Err(ErrorKind::Io(std::io::Error::new(
+                std::io::ErrorKind::NotFound, format!("{:?} not found!", path)
+            )).into())
         }
     }
 }

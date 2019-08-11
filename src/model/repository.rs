@@ -1,14 +1,17 @@
 use std::path::{Path, PathBuf};
-
+use flate2::bufread::ZlibDecoder;
 use super::object::GitObject;
 use super::id::Id;
 use crate::fs::{FileSystem, OsFs, MemFs};
 
 use crate::errors::*;
 use std::str::FromStr;
+use crate::model::object::parse_header;
+use std::io::{BufReader, BufRead};
 
-trait Repository {
-    fn lookup(id: &str) -> Option<GitObject>;
+pub trait Repository {
+    fn lookup(&self, id: &str) -> Option<GitObject>;
+    fn get_object(&self, id: &Id) -> Option<GitObject>;
 }
 
 #[derive(Debug)]
@@ -19,14 +22,8 @@ pub struct FileRepository<FS: FileSystem> {
     fs: FS,
 }
 
-
-impl Repository for FileRepository<OsFs> {
-    fn lookup(_id: &str) -> Option<GitObject> {
-        unimplemented!()
-    }
-}
-
 impl<FS: FileSystem> FileRepository<FS> {
+
     pub fn lookup_loose_object_by_prefix(&self, idstr: &str) -> Option<Id> {
         if idstr.len() <= 2 {
             return None;
@@ -48,6 +45,43 @@ impl<FS: FileSystem> FileRepository<FS> {
         } else {
             None
         }
+    }
+
+    pub fn read_loose_object(&self, id: &Id) -> Result<GitObject> {
+        let id_string = id.to_string();
+        let (prefix, rest) = id_string.split_at(2);
+        let path = self.git_dir
+            .join("objects")
+            .join(prefix)
+            .join(rest);
+        let file_reader= self.fs.read_file(path)?;
+        let mut reader = BufReader::new(
+            ZlibDecoder::new(BufReader::new(file_reader))
+        );
+
+        let mut vec = Vec::new();
+        reader.read_until(0, &mut vec).chain_err(||"read file failed.")?;
+        if let Ok((_, header)) = parse_header(&vec) {
+            return Ok(GitObject {
+                header,
+                content: Box::new(reader)
+            });
+        } else {
+            return Err(ErrorKind::ParseError.into());
+        }
+    }
+}
+
+ impl<FS: FileSystem> Repository for FileRepository<FS> {
+    fn lookup(&self, id: &str) -> Option<GitObject> {
+        if let Some(id) = self.lookup_loose_object_by_prefix(id) {
+            return self.get_object(&id);
+        }
+        None
+    }
+
+    fn get_object(&self, id: &Id) -> Option<GitObject> {
+        self.read_loose_object(id).ok()
     }
 }
 

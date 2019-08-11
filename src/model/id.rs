@@ -1,8 +1,12 @@
 use crate::errors::*;
+use std::fmt;
+use hex::*;
+
+type IDBytes = [u8; 20];
 
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Clone, Hash)]
 pub struct Id {
-    bytes: [u8; 20]
+    bytes: IDBytes
 }
 
 impl Id {
@@ -23,10 +27,14 @@ impl std::str::FromStr for Id {
             return Err(ErrorKind::BadId.into())
         }
         let mut id = Id::default();
-        for i in 0..20 {
-            let slice = &trimmed[i*2..i*2+2];
-            id.bytes[i] = u8::from_str_radix(slice, 16).chain_err(||ErrorKind::BadId)?;
-        }
+        id.bytes = IDBytes::from_hex(trimmed).chain_err(|| ErrorKind::BadId)?;
         Ok(id)
+    }
+}
+
+impl fmt::Display for Id {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.bytes.write_hex(f)?;
+        Ok(())
     }
 }
