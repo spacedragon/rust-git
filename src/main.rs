@@ -1,12 +1,10 @@
-
-
 extern crate structopt;
 
 use structopt::StructOpt;
 
 use rust_git::cmd::catfile::*;
 use rust_git::errors::*;
- 
+
 #[derive(Debug, StructOpt)]
 #[structopt(name = "git", about = "the rust git command")]
 enum Opt {
