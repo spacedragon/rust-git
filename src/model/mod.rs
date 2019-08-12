@@ -1,7 +1,7 @@
 pub mod repository;
 pub mod object;
 pub mod id;
-
+pub mod commit;
 
 
 #[cfg(test)]
@@ -37,6 +37,6 @@ mod tests {
         repo.add_file("objects/12/34567890123456789012345678901234567890", encoder.finish().unwrap());
         let obj = repo.lookup("1234");
         assert!(obj.is_some());
-        assert_eq!(obj.unwrap().header, header);
+        assert_eq!(obj.unwrap().header(), &header);
     }
 }

@@ -5,7 +5,9 @@ use std::str::FromStr;
 use nom::combinator::map_res;
 use std::str;
 use crate::errors::*;
-use std::io::BufRead;
+use std::io::{BufRead, Read};
+use std::fmt::{Display, Formatter};
+use crate::model::id::Id;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum ObjectType {
@@ -69,10 +71,40 @@ impl From<ObjectHeader> for Vec<u8> {
 }
 
 pub struct GitObject {
-    pub header: ObjectHeader,
-    pub content: Box<dyn BufRead>
+    id: Id,
+    header: ObjectHeader,
+    content: Box<dyn BufRead>
 }
 
+impl GitObject {
+    pub fn new(id: &Id, header: ObjectHeader, content: Box<dyn BufRead>) -> Self {
+        GitObject {
+            id: id.to_owned(),
+            header,
+            content
+        }
+    }
+    pub fn header(&self) -> &ObjectHeader {
+        &self.header
+    }
+
+    pub fn id(&self) -> &Id{
+        &self.id
+    }
+}
+
+impl Read for GitObject {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.content.read(buf)
+    }
+}
+
+
+impl Display for GitObject {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{:?} {:?}", self.header.object_type, self.id)
+    }
+}
 
 
 #[cfg(test)]

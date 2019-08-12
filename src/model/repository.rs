@@ -62,10 +62,7 @@ impl<FS: FileSystem> FileRepository<FS> {
         let mut vec = Vec::new();
         reader.read_until(0, &mut vec).chain_err(||"read file failed.")?;
         if let Ok((_, header)) = parse_header(&vec) {
-            return Ok(GitObject {
-                header,
-                content: Box::new(reader)
-            });
+            return Ok(GitObject::new(id, header, Box::new(reader)));
         } else {
             return Err(ErrorKind::ParseError.into());
         }

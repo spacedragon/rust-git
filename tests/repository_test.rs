@@ -1,6 +1,7 @@
 use rust_git::model::repository::{FileRepository, Repository};
 use rust_git::model::id::Id;
 use rust_git::model::object::ObjectType;
+use std::io::Read;
 
 
 #[test]
@@ -24,9 +25,9 @@ fn test_lookup_object() {
     let obj = repo.lookup("a221ac1");
     assert!(obj.is_some());
     let mut obj = obj.unwrap();
-    assert_eq!(obj.header.object_type, ObjectType::BLOB);
+    assert_eq!(obj.header().object_type, ObjectType::BLOB);
     let mut c = String::new();
-    let size = obj.content.read_to_string(&mut c).unwrap();
-    assert_eq!(size, obj.header.length);
+    let size = obj.read_to_string(&mut c).unwrap();
+    assert_eq!(size, obj.header().length);
     assert!(c.contains("target/"))
 }
