@@ -99,7 +99,7 @@ impl FileSystem for MemFs {
                      if let Some(parent) = p.parent() {
                          return parent == path;
                      }
-                    return false;
+                    false
                 })
                 .collect();
             Box::new(keys.into_iter())

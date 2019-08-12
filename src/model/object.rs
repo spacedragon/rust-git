@@ -88,6 +88,10 @@ impl GitObject {
         &self.header
     }
 
+    pub fn object_type(&self) -> ObjectType {
+        self.header.object_type.clone()
+    }
+
     pub fn id(&self) -> &Id{
         &self.id
     }
@@ -97,6 +101,10 @@ impl Read for GitObject {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         self.content.read(buf)
     }
+}
+
+pub trait AsObject<T> {
+    fn as_object(&mut self) -> Result<T>;
 }
 
 

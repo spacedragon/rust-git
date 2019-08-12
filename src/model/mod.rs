@@ -2,7 +2,7 @@ pub mod repository;
 pub mod object;
 pub mod id;
 pub mod commit;
-
+pub mod blob;
 
 #[cfg(test)]
 mod tests {

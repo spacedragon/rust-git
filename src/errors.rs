@@ -13,6 +13,7 @@ error_chain! {
         InvalidRepository(path: PathBuf){
             display("{:?} is not a valid repository", path)
         }
+        InvalidObjectType
         ParseError
     }
 }

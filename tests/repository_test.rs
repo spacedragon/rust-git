@@ -1,7 +1,12 @@
 use rust_git::model::repository::{FileRepository, Repository};
 use rust_git::model::id::Id;
-use rust_git::model::object::ObjectType;
+use rust_git::model::object::{ObjectType, AsObject};
 use std::io::Read;
+use rust_git::model::commit::Commit;
+use std::str::FromStr;
+use std::str;
+use rust_git::model::blob::Blob;
+use std::convert::TryInto;
 
 
 #[test]
@@ -30,4 +35,27 @@ fn test_lookup_object() {
     let size = obj.read_to_string(&mut c).unwrap();
     assert_eq!(size, obj.header().length);
     assert!(c.contains("target/"))
+}
+
+#[test]
+fn test_lookup_commit() {
+    let repo = FileRepository::open(".").unwrap();
+    let obj = repo.lookup("d586c1ae7");
+    assert!(obj.is_some());
+    let mut obj = obj.unwrap();
+    let commit: Commit = obj.try_into().expect("parse commit faild.");
+    assert_eq!(commit.tree(), &Id::from_str("e4f31b37d03f304f38d6f1d6c545848c8d70194c").unwrap());
+    assert_eq!(commit.message(), "parse commit");
+}
+
+#[test]
+fn test_lookup_blob() {
+    let repo = FileRepository::open(".").unwrap();
+    let obj = repo.lookup("a221ac1");
+    assert!(obj.is_some());
+    let mut obj = obj.unwrap();
+    let blob: Blob = obj.try_into().expect("parse commit faild.");
+    assert!(str::from_utf8(blob.content()).unwrap().contains("target/"));
+
+
 }
