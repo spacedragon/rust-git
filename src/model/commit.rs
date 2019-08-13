@@ -15,7 +15,7 @@ use nom::combinator::{map_res, rest};
 use nom::branch::alt;
 use std::fmt::{Display, Formatter};
 use std::io::{Read};
-use nom::character::complete::not_line_ending;
+use nom::character::complete::{not_line_ending, line_ending};
 use super::object::*;
 use std::convert::TryFrom;
 
@@ -152,7 +152,7 @@ fn parse_attr(input: &[u8]) -> IResult<&[u8], Attr> {
 
 fn parse_commit<'a>(input: &'a[u8], id: &Id) -> IResult<&'a[u8], Commit> {
     let (input, attrs_str) = take_until("\n\n")(input)?;
-    let (_, attrs) = separated_list(tag("\n"), parse_attrs)(attrs_str)?;
+    let (_, attrs) = separated_list(line_ending, parse_attrs)(attrs_str)?;
     let (input, message) = map_res(rest, str::from_utf8)(input)?;
     let mut commit = Commit {
         id: id.to_owned(),

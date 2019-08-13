@@ -15,7 +15,9 @@ impl Id {
         bytes.clone_from_slice(buf);
         Id { bytes }
     }
-
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
 }
 
 impl std::str::FromStr for Id {

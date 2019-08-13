@@ -1,8 +1,8 @@
-use nom::{IResult, combinator::map};
+use nom::IResult;
 use nom::branch::alt;
 use nom::bytes::complete::{take_until, tag};
 use std::str::FromStr;
-use nom::combinator::map_res;
+use nom::combinator::{ map, map_res};
 use std::str;
 use crate::errors::*;
 use std::io::{BufRead, Read};

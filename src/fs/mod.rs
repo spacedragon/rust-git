@@ -19,7 +19,7 @@ pub trait FileSystem {
             dir = path.as_path();
         } else {
             prefix = path.file_name().map(|f|f.to_os_string());
-            dir = path.parent().unwrap_or(Path::new("."));
+            dir = path.parent().unwrap_or_else(||Path::new("."));
         }
         if let Some(prefix) = prefix {
             let iter = self.read_dir(&dir)
@@ -78,7 +78,7 @@ impl MemFs {
 impl FileSystem for MemFs {
     fn is_dir<P: AsRef<Path>>(&self, path: P) -> bool {
         let path = path.as_ref();
-        for (p, _) in &self.0 {
+        for p in self.0.keys() {
             let mut dir = p.parent();
             while let Some(p) = dir {
                 if p == path {
