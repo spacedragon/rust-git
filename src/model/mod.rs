@@ -3,6 +3,7 @@ pub mod object;
 pub mod id;
 pub mod commit;
 pub mod blob;
+pub mod tree;
 
 #[cfg(test)]
 mod tests {

@@ -32,3 +32,4 @@ fn run() -> Result<()> {
         Opt::CatFile(opt) => cat_file(&mut clap, opt),
     }
 }
+
