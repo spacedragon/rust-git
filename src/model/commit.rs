@@ -50,9 +50,9 @@ impl Commit {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Identity {
-    name: String,
-    email: String,
-    date: DateTime<FixedOffset>,
+    pub name: String,
+    pub email: String,
+    pub date: DateTime<FixedOffset>,
 }
 
 impl Display for Identity {
@@ -61,7 +61,7 @@ impl Display for Identity {
     }
 }
 
-enum Attr {
+pub enum Attr {
     Tree(Id),
     Parent(Id),
     Author(Identity),
@@ -69,11 +69,7 @@ enum Attr {
     Unknown(String, String),
 }
 
-
-
-
-
-fn id_from_bytes(input: &[u8]) -> Result<Id> {
+pub(crate) fn id_from_str_bytes(input: &[u8]) -> Result<Id> {
     let str = str::from_utf8(input)?;
     Id::from_str(str)
 }
@@ -81,14 +77,14 @@ fn id_from_bytes(input: &[u8]) -> Result<Id> {
 fn parse_tree(input: &[u8]) -> IResult<&[u8], Attr> {
     let (input, _key) = tag("tree")(input)?;
     let (input, _) = take_while(is_space)(input)?;
-    let (input, id) = map_res(not_line_ending, id_from_bytes)(input)?;
+    let (input, id) = map_res(not_line_ending, id_from_str_bytes)(input)?;
     Ok((input, Attr::Tree(id)))
 }
 
 fn parse_parent(input: &[u8]) -> IResult<&[u8], Attr> {
     let (input, _key) = tag("parent")(input)?;
     let (input, _) = take_while(is_space)(input)?;
-    let (input, id) = map_res(not_line_ending, id_from_bytes)(input)?;
+    let (input, id) = map_res(not_line_ending, id_from_str_bytes)(input)?;
     Ok((input, Attr::Parent(id)))
 }
 
@@ -104,7 +100,7 @@ fn parse_datetime(input: &[u8]) -> IResult<&[u8], DateTime<FixedOffset>> {
     Ok((input, dt))
 }
 
-fn parse_identity(input: &[u8]) -> IResult<&[u8], Identity> {
+pub fn parse_identity(input: &[u8]) -> IResult<&[u8], Identity> {
     let (input, name) = map_res(
         take_until(" <"), str::from_utf8)(input)?;
     let (input, _) = tag(" ")(input)?;

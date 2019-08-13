@@ -8,6 +8,7 @@ use std::str;
 use rust_git::model::blob::Blob;
 use std::convert::TryInto;
 use rust_git::model::tree::*;
+use rust_git::model::tag::Tag;
 
 
 #[test]
@@ -69,5 +70,17 @@ fn test_lookup_tree() {
     let file = tree.entries().iter().find(|e| e.name() == "Cargo.toml");
     assert!(file.is_some());
     assert_eq!(file.unwrap().mode() , FileMode::FILE);
+}
+#[test]
+fn test_lookup_tag() {
+    let repo = FileRepository::open(".").unwrap();
+    let obj = repo.lookup("a8903f510");
+    assert!(obj.is_some());
+    let obj = obj.unwrap();
+    let tag: Tag = obj.try_into().expect("parse tag failed.");
+    assert_eq!(tag.object(), &Id::from_str("a541069eb298c4969982721adea07e526d899351").unwrap());
+    assert_eq!(tag.object_type(), ObjectType::COMMIT);
+    assert_eq!(tag.tag(), "v0.1");
+    assert_eq!(tag.message(), "a tag");
 }
 

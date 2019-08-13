@@ -29,7 +29,7 @@ fn parse_length(input: &[u8]) -> IResult<&[u8], usize> {
     )(input)
 }
 
-fn parse_type(input: &[u8]) -> IResult<&[u8] , ObjectType> {
+pub fn parse_object_type(input: &[u8]) -> IResult<&[u8] , ObjectType> {
     let types = alt((
                     map(tag("blob"), |_| ObjectType::BLOB),
                      map(tag("commit"), |_| ObjectType::COMMIT),
@@ -39,7 +39,7 @@ fn parse_type(input: &[u8]) -> IResult<&[u8] , ObjectType> {
 }
 
 pub fn parse_header(input: &[u8]) -> IResult<&[u8], ObjectHeader> {
-    let (input, object_type) = parse_type(input)?;
+    let (input, object_type) = parse_object_type(input)?;
     let (input, _) = tag(" ")(input)?;
     let (input, length) = parse_length(input)?;
     let (input, _) = tag("\0")(input)?;
