@@ -121,7 +121,7 @@ fn parse_mode(input: &[u8]) -> IResult<&[u8], FileMode> {
     )(input)
 }
 
-fn parse_id(input: &[u8]) -> IResult<&[u8], Id> {
+pub fn parse_id(input: &[u8]) -> IResult<&[u8], Id> {
     map(
         take(20u8),
         Id::new

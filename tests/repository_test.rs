@@ -9,6 +9,9 @@ use rust_git::model::blob::Blob;
 use std::convert::TryInto;
 use rust_git::model::tree::*;
 use rust_git::model::tag::Tag;
+use std::path::Path;
+use rust_git::fs::{OsFs, FileSystem};
+use rust_git::fs::pack_idx::PackIdx;
 
 
 #[test]
@@ -84,3 +87,20 @@ fn test_lookup_tag() {
     assert_eq!(tag.message(), "a tag");
 }
 
+#[test]
+fn test_parse_idx() {
+
+    let dir = Path::new(".").join("tests").join("packfiles");
+    let idx = dir.join("pack-1dba36995240d4e37eb9c1aae367accc94169fc4.idx");
+    let os = OsFs;
+    let reader = os.read_file(idx).expect("read file failed.");
+    let idx: PackIdx = reader.try_into().expect("parse idx failed");
+    assert_eq!(idx.version(), 2);
+    let id = Id::from_str("a6952adde41289267215c9cdd0487df025214952").expect("");
+    let offset = idx.find_offset(&id);
+    assert_eq!(offset, Some(12));
+
+    let id = Id::from_str("a9d37c560c6ab8d4afbf47eda643e8c42e857716").expect("");
+    let offset = idx.find_offset(&id);
+    assert_eq!(offset, Some(8474));
+ }

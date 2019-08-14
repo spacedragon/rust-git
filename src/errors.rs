@@ -15,5 +15,8 @@ error_chain! {
         InvalidObjectType
         ParseError
         BadMode
+        UnsupportedPackIndexVersion
+        ChecksumMismatch
     }
 }
+
