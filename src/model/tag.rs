@@ -11,9 +11,10 @@ use crate::model::object::{parse_object_type, GitObject};
 use nom::branch::alt;
 use nom::multi::separated_list;
 use std::collections::HashMap;
-use std::io::Read;
-use std::convert::TryFrom;
+
+
 use crate::errors::*;
+use crate::model::repository::Repository;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Tag {
@@ -45,6 +46,17 @@ impl Tag {
     }
     pub fn object_type(&self) -> ObjectType {
         self.object_type.clone()
+    }
+
+    pub fn from(repo: &dyn Repository,obj: &GitObject) -> Result<Self> {
+        if obj.object_type() == ObjectType::TAG {
+            let buf = repo.read_content(&obj)?;
+            let tag: Tag = parse_tag_object(&buf, obj.id()).map(|res| res.1)
+                .map_err(|_|ErrorKind::ParseError)?;
+            Ok(tag)
+        } else {
+            Err(ErrorKind::InvalidObjectType.into())
+        }
     }
 }
 
@@ -124,21 +136,6 @@ fn parse_tag_object<'a>(input :&'a[u8], id: &Id) -> IResult<&'a[u8] , Tag> {
         }
     }
     Ok((input, tag))
-}
-
-impl TryFrom<GitObject> for Tag {
-    type Error = Error;
-    fn try_from(mut obj: GitObject) -> Result<Self> {
-        if obj.object_type() == ObjectType::TAG {
-            let mut buf: Vec<u8> = Vec::new();
-            obj.read_to_end(&mut buf)?;
-            let tag: Tag = parse_tag_object(&buf, obj.id()).map(|res| res.1)
-                .map_err(|_|ErrorKind::ParseError)?;
-            Ok(tag)
-        } else {
-            Err(ErrorKind::InvalidObjectType.into())
-        }
-    }
 }
 
 #[cfg(test)]

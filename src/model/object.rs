@@ -1,3 +1,4 @@
+use crate::fs::locator::Locator;
 use nom::IResult;
 use nom::branch::alt;
 use nom::bytes::complete::{take_until, tag};
@@ -5,9 +6,15 @@ use std::str::FromStr;
 use nom::combinator::{ map, map_res};
 use std::str;
 use crate::errors::*;
-use std::io::{BufRead, Read};
+
 use std::fmt::{Display, Formatter};
 use crate::model::id::Id;
+
+use crate::fs::pack_file::PackReader;
+
+use std::io::{Read, BufRead};
+
+
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum ObjectType {
@@ -70,18 +77,67 @@ impl From<ObjectHeader> for Vec<u8> {
     }
 }
 
+
+pub enum Source<'a> {
+    FromPack(PackReader<'a>),
+    FromLooseFile(Box<dyn BufRead>)
+}
+
+pub struct ContentReader<'a> {
+    pub(crate) source: Source<'a>,
+    pub(crate) base: Option<Box<ContentReader<'a>>>
+}
+
+impl <'a> ContentReader<'a> {
+    pub fn attach_base(&mut self, base:ContentReader<'a>) {
+        self.base = Some(Box::new(base));
+    }
+    pub fn from_pack(pack_reader: PackReader<'a>) -> Self {
+        let source = Source::FromPack(pack_reader);
+        ContentReader {
+            source,
+            base: None
+        }
+    }
+
+    pub fn from_loose_file(reader: Box<dyn BufRead>) -> Self {
+        let source = Source::FromLooseFile(reader);
+        ContentReader {
+            source,
+            base: None
+        }
+    }
+}
+
+impl <'a> Read for ContentReader<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match &mut self.source {
+            Source::FromLooseFile(reader) => {
+                reader.read(buf)
+            }
+            Source::FromPack(reader) => {
+                if let Some(_base) = &self.base {
+                    unimplemented!()
+                } else {
+                    reader.read(buf)
+                }
+            }
+        }
+    }
+}
+
 pub struct GitObject {
     id: Id,
     header: ObjectHeader,
-    content: Box<dyn BufRead>
+    pub(crate) locator: Locator
 }
 
 impl GitObject {
-    pub fn new(id: &Id, header: ObjectHeader, content: Box<dyn BufRead>) -> Self {
+    pub(crate) fn new(id: &Id, header: ObjectHeader, locator: Locator) -> Self {
         GitObject {
             id: id.to_owned(),
             header,
-            content
+            locator
         }
     }
     pub fn header(&self) -> &ObjectHeader {
@@ -92,21 +148,14 @@ impl GitObject {
         self.header.object_type.clone()
     }
 
+    pub fn size(&self) -> usize {
+        self.header.length
+    }
+
     pub fn id(&self) -> &Id{
         &self.id
     }
 }
-
-impl Read for GitObject {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        self.content.read(buf)
-    }
-}
-
-pub trait AsObject<T> {
-    fn as_object(&mut self) -> Result<T>;
-}
-
 
 impl Display for GitObject {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {

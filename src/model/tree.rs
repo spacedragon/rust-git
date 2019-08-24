@@ -10,8 +10,9 @@ use nom::combinator::{map_res, map};
 
 use nom::multi::many0;
 use crate::model::object::*;
-use std::convert::TryFrom;
-use std::io::Read;
+
+
+use crate::model::repository::Repository;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum EntryType {
@@ -45,6 +46,17 @@ impl Tree {
 
     pub fn entries(&self) -> &[TreeEntry] {
         self.entries.as_slice()
+    }
+
+    pub fn from(repo: &dyn Repository, obj: &GitObject) -> Result<Self> {
+        if obj.object_type() == ObjectType::TREE {
+            let buf = repo.read_content(&obj)?;
+            let tree: Tree = parse_tree(&buf, obj.id()).map(|res| res.1)
+                .map_err(|_|ErrorKind::ParseError)?;
+            Ok(tree)
+        } else {
+            Err(ErrorKind::InvalidObjectType.into())
+        }
     }
 }
 
@@ -156,20 +168,7 @@ fn parse_tree<'a>(input: &'a[u8], id: &Id) -> IResult<&'a[u8], Tree> {
     }))
 }
 
-impl TryFrom<GitObject> for Tree {
-    type Error = Error;
-    fn try_from(mut obj: GitObject) -> Result<Self> {
-        if obj.object_type() == ObjectType::TREE {
-            let mut buf: Vec<u8> = Vec::new();
-            obj.read_to_end(&mut buf)?;
-            let tree: Tree = parse_tree(&buf, obj.id()).map(|res| res.1)
-                .map_err(|_|ErrorKind::ParseError)?;
-            Ok(tree)
-        } else {
-            Err(ErrorKind::InvalidObjectType.into())
-        }
-    }
-}
+
 
 #[cfg(test)]
 mod tests {

@@ -13,10 +13,12 @@ error_chain! {
             display("{:?} is not a valid repository", path)
         }
         InvalidObjectType
+        InvalidPackfile
         ParseError
         BadMode
         UnsupportedPackIndexVersion
         ChecksumMismatch
+        NotBelongThisRepo
     }
 }
 

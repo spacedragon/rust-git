@@ -47,7 +47,7 @@ impl PackIdx {
         }
     }
 
-    pub fn find_offset(&self, id: &Id) -> Option<u32> {
+    pub fn lookup(&self, id: &Id) -> Option<(Id, usize)> {
         let (fanout, offsets, objects) = match self {
             PackIdx::V1(a) => (&a.fanout, &a.offsets, &a.objects),
             PackIdx::V2(a) => (&a.fanout, &a.offsets, &a.objects),
@@ -57,15 +57,24 @@ impl PackIdx {
             fanout[first_byte - 1] as usize
         } else { 0usize };
         let mut hi = fanout[first_byte] as usize;
-
+        let len = objects.len();
         loop {
             let mid = ((hi + lo) / 2) as usize;
+            if mid >= len {
+                return None;
+            }
             let mid_id = &objects[mid];
-            match id.partial_cmp(mid_id) {
+            match id.partial_cmp(&mid_id) {
                 Some(Ordering::Less) => { hi = mid }
                 Some(Ordering::Greater) => { lo = mid + 1 }
-                Some(Ordering::Equal) => return Some(offsets[mid]),
+                Some(Ordering::Equal) =>  {
+                    let offset = offsets[mid] as usize;
+                    return Some((mid_id.clone(), offset));
+                },
                 _ => return None,
+            }
+            if lo >= hi {
+                return None;
             }
         }
     }
@@ -156,7 +165,7 @@ fn parse_fanout(input: &[u8]) -> IResult<&[u8], ([u32; 255], usize)> {
 }
 
 
-fn parse_idx_v1(mut f: &mut Sha1Reader<Box<SeekRead>>, magic: [u8; 4], version: [u8; 4]) -> Result<PackIdx> {
+fn parse_idx_v1(mut f: &mut Sha1Reader<Box<dyn SeekRead>>, magic: [u8; 4], version: [u8; 4]) -> Result<PackIdx> {
     // parse v1
     let mut fanout_buf = [0u8; 256 * 4];
     fanout_buf[0..4].clone_from_slice(&magic);
@@ -181,7 +190,7 @@ fn parse_idx_v1(mut f: &mut Sha1Reader<Box<SeekRead>>, magic: [u8; 4], version: 
 }
 
 
-fn parse_idx_v2(mut f: &mut Sha1Reader<Box<SeekRead>>) -> Result<PackIdx> {
+fn parse_idx_v2(mut f: &mut Sha1Reader<Box<dyn SeekRead>>) -> Result<PackIdx> {
 // parse v2
     let mut fanout_buf = [0u8; 256 * 4];
     f.read_exact(&mut fanout_buf)?;

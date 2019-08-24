@@ -14,10 +14,11 @@ use crate::errors::*;
 use nom::combinator::{map_res, rest};
 use nom::branch::alt;
 use std::fmt::{Display, Formatter};
-use std::io::{Read};
+
 use nom::character::complete::{not_line_ending, line_ending};
 use super::object::*;
-use std::convert::TryFrom;
+
+use crate::model::repository::Repository;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Commit {
@@ -45,6 +46,17 @@ impl Commit {
     }
     pub fn tree(&self) -> &Id {
         &self.tree
+    }
+
+    pub fn from(repo: &dyn Repository, obj: &GitObject) -> Result<Self> {
+        if obj.object_type() == ObjectType::COMMIT {
+            let buf = repo.read_content(&obj)?;
+            let commit: Commit = parse_commit(&buf, obj.id()).map(|res| res.1)
+                .map_err(|_|ErrorKind::ParseError)?;
+            Ok(commit)
+        } else {
+            Err(ErrorKind::InvalidObjectType.into())
+        }
     }
 }
 
@@ -169,21 +181,6 @@ fn parse_commit<'a>(input: &'a[u8], id: &Id) -> IResult<&'a[u8], Commit> {
         }
     }
     Ok((input, commit))
-}
-
-impl TryFrom<GitObject> for Commit {
-    type Error = Error;
-    fn try_from(mut obj: GitObject) -> Result<Self> {
-        if obj.object_type() == ObjectType::COMMIT {
-            let mut buf: Vec<u8> = Vec::new();
-            obj.read_to_end(&mut buf)?;
-            let commit: Commit = parse_commit(&buf, obj.id()).map(|res| res.1)
-                .map_err(|_|ErrorKind::ParseError)?;
-            Ok(commit)
-        } else {
-            Err(ErrorKind::InvalidObjectType.into())
-        }
-    }
 }
 
 #[cfg(test)]

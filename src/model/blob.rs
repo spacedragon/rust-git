@@ -1,8 +1,9 @@
 use crate::model::id::Id;
 use crate::model::object::*;
-use std::io::Read;
+
 use crate::errors::*;
-use std::convert::TryFrom;
+
+use crate::model::repository::Repository;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Blob {
@@ -17,14 +18,10 @@ impl Blob {
     pub fn content(&self) -> &[u8] {
         self.content.as_slice()
     }
-}
 
-impl TryFrom<GitObject> for Blob {
-    type Error = Error;
-    fn try_from(mut obj: GitObject) -> Result<Self> {
+    pub fn from(repo: &dyn Repository, obj: &GitObject) -> Result<Self> {
         if obj.header().object_type == ObjectType::BLOB {
-            let mut content: Vec<u8> = Vec::new();
-            obj.read_to_end(&mut content)?;
+            let content = repo.read_content(&obj)?;
             Ok(Blob {
                 id: obj.id().to_owned(),
                 content
@@ -34,3 +31,4 @@ impl TryFrom<GitObject> for Blob {
         }
     }
 }
+
