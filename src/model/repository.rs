@@ -6,14 +6,15 @@ use crate::fs::{FileSystem, OsFs, MemFs};
 
 use crate::errors::*;
 use std::str::FromStr;
-use crate::model::object::{parse_header, ContentReader};
-use std::io::{BufReader, BufRead, Read, Write};
+use crate::model::object::{parse_header};
+use std::io::{BufReader, BufRead, Write};
 use crate::fs::pack_file::PackFile;
 use crate::fs::locator::Locator;
 use crate::fs::pack_idx::PackIdx;
 use std::convert::TryInto;
 use std::fmt::{Display, Formatter};
 use std::collections::HashMap;
+use crate::fs::content_reader::ContentReader;
 
 pub trait Repository {
     fn lookup(&self, id: &str) -> Option<GitObject>;
@@ -107,21 +108,21 @@ impl<FS: FileSystem> FileRepository<FS> {
 
     pub fn read_content_by_id(&self, id: &Id) -> Result<ContentReader> {
         if let Some(obj) = self.get_object(id) {
-            self.read_content(&obj.locator)
+            self.read_content(&obj.locator, obj.size())
         } else {
             Err(ErrorKind::NotBelongThisRepo.into())
         }
     }
 
-    fn read_content(&self, locator: &Locator) -> Result<ContentReader> {
+    fn read_content(&self, locator: &Locator, size: usize) -> Result<ContentReader> {
         match locator {
             Locator::PackOfs(pack_id, offset, base_offset) => {
                 if let Some(pack) = self.packfiles.get(pack_id) {
-                    let (base_locator,_, _len ) =
+                    let (base_locator, _, base_len) =
                         pack.read_object(*base_offset)?;
-                    let base = self.read_content(&base_locator)?;
-                    let mut obj = pack.read_object_content(*offset)?;
-                    obj.attach_base(base);
+                    let base = self.read_content(&base_locator, base_len)?;
+                    let obj = pack.read_object_content(*offset, size)?;
+                    let obj = obj.attach_base(base, size)?;
                     Ok(obj)
                 } else {
                     Err(ErrorKind::NotBelongThisRepo.into())
@@ -131,8 +132,8 @@ impl<FS: FileSystem> FileRepository<FS> {
                 if let Some(pack) = self.packfiles.get(pack_id) {
                     let base =
                         self.read_content_by_id(ref_id)?;
-                    let mut obj = pack.read_object_content(*offset)?;
-                    obj.attach_base(base);
+                    let obj = pack.read_object_content(*offset, size)?;
+                    let obj = obj.attach_base(base, size)?;
                     Ok(obj)
                 } else {
                     Err(ErrorKind::NotBelongThisRepo.into())
@@ -140,7 +141,7 @@ impl<FS: FileSystem> FileRepository<FS> {
             }
             Locator::Packfile(pack_id, offset) => {
                 if let Some(pack) = self.packfiles.get(pack_id) {
-                    let obj = pack.read_object_content(*offset)?;
+                    let obj = pack.read_object_content(*offset, size)?;
                     Ok(obj)
                 } else {
                     Err(ErrorKind::NotBelongThisRepo.into())
@@ -148,14 +149,9 @@ impl<FS: FileSystem> FileRepository<FS> {
             }
             Locator::LooseObject(path, offset) => {
                 let file_reader = self.fs.read_file(&path)?;
-                let mut reader = BufReader::new(
-                    ZlibDecoder::new(BufReader::new(file_reader))
-                );
-                std::io::copy(&mut reader.by_ref().take(*offset as u64), &mut std::io::sink())?;
-                Ok(ContentReader::from_loose_file(Box::new(reader)))
+                Ok(ContentReader::from_loose_file(file_reader, *offset, size))
             }
         }
-
     }
 }
 
@@ -176,13 +172,12 @@ impl<FS: FileSystem> Repository for FileRepository<FS> {
 
     fn read_content(&self, git_object: &GitObject) -> Result<Vec<u8>> {
         let mut buf = Vec::with_capacity(git_object.size());
-        let size = self.write_content(git_object, &mut buf)?;
-        assert_eq!(size as usize, git_object.size());
+        self.write_content(git_object, &mut buf)?;
         Ok(buf)
     }
 
     fn write_content(&self, git_object: &GitObject, writer: &mut dyn Write) -> Result<u64> {
-        let mut reader = self.read_content(&git_object.locator)?;
+        let mut reader = self.read_content(&git_object.locator, git_object.size())?;
         let size = std::io::copy(&mut reader, writer)?;
         Ok(size)
     }

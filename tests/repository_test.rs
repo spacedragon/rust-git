@@ -127,14 +127,24 @@ fn test_parse_pack() {
 }
 
 #[test]
-
 fn test_load_object_from_pack() {
     let repo = FileRepository::open("./tests/fixture").expect("open repo failed");
     let obj = repo.lookup("a6952add");
     assert!(obj.is_some());
     let obj = obj.unwrap();
     assert_eq!(obj.object_type(), ObjectType::COMMIT);
-    let _reader = repo.read_content_by_id(obj.id()).expect("read content failed");
     let commit = Commit::from(&repo, &obj).expect("parse tree failed");
     assert_eq!(commit.tree(), &Id::from_str("a31f42a223bbd8415781fcb4ad2c235778730e45").unwrap());
+}
+
+#[test]
+fn test_load_deltified_object_from_pack() {
+    let repo = FileRepository::open("./tests/fixture").expect("open repo failed");
+    let obj = repo.lookup("86930390cd94497678a0ee06fa09bdf838e794f5");
+    assert!(obj.is_some());
+    let obj = obj.unwrap();
+    assert_eq!(obj.object_type(), ObjectType::BLOB);
+    let blob = Blob::from(&repo, &obj).expect("parse blob failed");
+    let content = str::from_utf8(blob.content()).expect("parse content failed");
+    assert!(content.len() > 0);
 }

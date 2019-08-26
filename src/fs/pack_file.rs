@@ -4,12 +4,15 @@ use nom::bytes::complete::{tag, take};
 use nom::number::complete::be_u32;
 use crate::errors::*;
 use crate::model::id::Id;
-use crate::model::object::{GitObject, ObjectType, ObjectHeader, ContentReader};
+use crate::model::object::{GitObject, ObjectType, ObjectHeader};
 use std::io::{BufReader, Read, Write};
-use flate2::bufread::ZlibDecoder;
+use flate2::read::ZlibDecoder;
 use crate::fs::locator::Locator;
 
 use crate::model::tree::parse_id;
+use std::cmp::min;
+use crate::fs::content_reader::ContentReader;
+use std::mem;
 
 pub struct PackFile {
     mmap: Box<dyn AsRef<[u8]>>,
@@ -94,7 +97,7 @@ impl PackFile {
                 };
                 let locator = match pack_object_type {
                     PackObjectType::OFS_DELTA => {
-                        let (input, delta_offset) = parse_varint(input)
+                        let (input, delta_offset) = parse_offset(input)
                             .map_err(|_|ErrorKind::ParseError)?;
                         let data_offset = input.as_ptr() as usize - mmap.as_ptr() as usize;
                         Locator::PackOfs(self.id(), data_offset, from_offset - delta_offset)
@@ -116,34 +119,49 @@ impl PackFile {
         }
     }
 
-    pub fn read_object_content(&self, from_offset: usize) -> Result<ContentReader> {
-        let pack_reader = PackReader::new(self, from_offset);
+    pub fn read_object_content(&self, from_offset: usize, size: usize) -> Result<ContentReader> {
+        let pack_reader = PackZlibReader::new(self, from_offset, size);
         Ok(ContentReader::from_pack(pack_reader))
     }
 }
 
-pub struct PackReader<'a> {
-    pack: &'a PackFile,
-    reader: ZlibDecoder<BufReader<&'a [u8]>>,
+pub struct PackZlibReader<'a> {
+    reader: ZlibDecoder<&'a [u8]>,
+    pos: usize,
+    input: &'a [u8],
+    size: usize,
 }
 
-impl <'a> PackReader<'a> {
-    fn new(pack: &'a PackFile, offset: usize) -> Self {
+impl <'a> PackZlibReader<'a> {
+    fn new(pack: &'a PackFile, offset: usize, size: usize) -> Self {
         let mmap = (*(pack.mmap)).as_ref();
         let input = &mmap[offset..];
-        let reader =
-            ZlibDecoder::new(BufReader::new(input));
-
-        PackReader {
-            pack,
-            reader
+        let reader = ZlibDecoder::new(input);
+        Self {
+            input,
+            reader,
+            size,
+            pos: 0
         }
+    }
+    pub(crate) fn reset(&mut self) {
+        let input = self.input;
+        mem::replace(&mut self.reader, ZlibDecoder::new(input));
+        self.pos = 0;
     }
 }
 
-impl <'a> Read for PackReader<'a> {
+impl <'a> Read for PackZlibReader<'a> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        self.reader.read(buf)
+        let remain = self.size - self.pos;
+        if remain > 0 {
+            let len = min(remain, buf.len());
+            let len = self.reader.read(&mut buf[..len])?;
+            self.pos += len;
+            Ok(len)
+        } else {
+            Ok(0)
+        }
     }
 }
 
@@ -174,7 +192,7 @@ fn parse_object_header(input: &[u8]) -> IResult<&[u8], (PackObjectType, usize)> 
     };
     let mut size = (byte & 0b0000_1111) as usize;
     let mut shift = 4;
-    while byte > 128u8 {
+    while byte >= 128u8 {
         let (rest, b) = take(1u8)(input)?;
         byte = b[0];
         input = rest;
@@ -186,20 +204,20 @@ fn parse_object_header(input: &[u8]) -> IResult<&[u8], (PackObjectType, usize)> 
     Ok((input, (object_type, size)))
 }
 
-fn parse_varint(input: &[u8]) -> IResult<&[u8], usize> {
-    let mut byte = input[0];
-    let mut input = &input[1..];
-    let mut size = (byte & 0b0111_1111) as usize;
-    let mut shift = 7;
-    while byte > 128u8 {
+fn parse_offset(input: &[u8]) -> IResult<&[u8], usize> {
+    let (mut input, byte) = take(1u8)(input)?;
+    let mut byte = byte[0];    
+    let mut offset = (byte & 0b0111_1111) as usize;
+    while byte >= 128u8 {
+        offset += 1;
+        offset <<= 7;
         let (rest, b) = take(1u8)(input)?;
         byte = b[0];
         input = rest;
         let value = (byte & 0b0111_1111) as usize;
-        size |= value << shift;
-        shift += 7;
+        offset += value;
     }
-    Ok((input, size))
+    Ok((input, offset))
 }
 
 enum PackObjectType {

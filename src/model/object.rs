@@ -1,3 +1,4 @@
+
 use crate::fs::locator::Locator;
 use nom::IResult;
 use nom::branch::alt;
@@ -10,9 +11,9 @@ use crate::errors::*;
 use std::fmt::{Display, Formatter};
 use crate::model::id::Id;
 
-use crate::fs::pack_file::PackReader;
 
-use std::io::{Read, BufRead};
+
+
 
 
 
@@ -74,55 +75,6 @@ impl From<ObjectHeader> for Vec<u8> {
         ret.extend(o.length.to_string().as_bytes());
         ret.push(0u8);
         ret
-    }
-}
-
-
-pub enum Source<'a> {
-    FromPack(PackReader<'a>),
-    FromLooseFile(Box<dyn BufRead>)
-}
-
-pub struct ContentReader<'a> {
-    pub(crate) source: Source<'a>,
-    pub(crate) base: Option<Box<ContentReader<'a>>>
-}
-
-impl <'a> ContentReader<'a> {
-    pub fn attach_base(&mut self, base:ContentReader<'a>) {
-        self.base = Some(Box::new(base));
-    }
-    pub fn from_pack(pack_reader: PackReader<'a>) -> Self {
-        let source = Source::FromPack(pack_reader);
-        ContentReader {
-            source,
-            base: None
-        }
-    }
-
-    pub fn from_loose_file(reader: Box<dyn BufRead>) -> Self {
-        let source = Source::FromLooseFile(reader);
-        ContentReader {
-            source,
-            base: None
-        }
-    }
-}
-
-impl <'a> Read for ContentReader<'a> {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        match &mut self.source {
-            Source::FromLooseFile(reader) => {
-                reader.read(buf)
-            }
-            Source::FromPack(reader) => {
-                if let Some(_base) = &self.base {
-                    unimplemented!()
-                } else {
-                    reader.read(buf)
-                }
-            }
-        }
     }
 }
 

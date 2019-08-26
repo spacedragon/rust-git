@@ -11,9 +11,25 @@ pub mod pack_idx;
 pub mod pack_file;
 pub mod checksum;
 pub mod locator;
+pub mod delta;
+pub mod content_reader;
+pub mod loose_file;
 
 pub trait SeekRead: Seek + Read {}
 impl<T: Seek + Read> SeekRead for T {}
+
+pub trait Forwardable {
+    fn forward(&mut self, forward: u64) -> std::io::Result<()>;
+}
+
+impl <T: Read> Forwardable for T {
+    fn forward(&mut self, forward: u64) -> std::io::Result<()> {
+        if forward > 0 {
+            std::io::copy(&mut self.by_ref().take(forward), &mut std::io::sink())?;
+        }
+        Ok(())
+    }
+}
 
 pub trait FileSystem {
     fn is_dir<P: AsRef<Path>>(&self, path: P) -> bool;
